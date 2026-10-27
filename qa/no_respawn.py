@@ -1,7 +1,7 @@
 """SEVENFOLD QA (round 5): taken items never respawn, and unlocked
 passages stay open.
 
-Regression test for Cori's round-4 bug report (used ladder/mirror
+Regression test for Designer's round-4 bug report (used ladder/mirror
 reappearing), extended to every round-5 item and lock: after taking
 and consuming each item, revisiting its room must show a floor tile
 and a never-cursor-reachable hotspot, and g_taken/g_taken2 bits must
