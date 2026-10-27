@@ -8,7 +8,7 @@ asserts, for every room:
   at the item and the take-blanking erases the right tile);
 - every DOOR hotspot sits on a 'D' tile;
 - every USE/LOOK hotspot sits on a non-floor tile (something visible);
-- no room holds more than 1 collectible (Cori's round-4 rule);
+- no room holds more than 1 collectible (Designer's round-4 rule);
 - every DOOR target is a valid room index, and every TAKE lock is a
   known lock constant.
 This catches map typos (wrong row/column, missing door tile) that a
