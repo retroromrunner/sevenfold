@@ -139,7 +139,7 @@ static void taken_set(uint8_t it) {
 
 /* --- audio: music on channel 2, SFX on channel 1, ticked once per frame.
  * Frequencies are GB timer values: f = 2048 - 131072 / Hz.
- * Music plays ONLY on the title screen (Cori: in-game music is
+ * Music plays ONLY on the title screen (Designer: in-game music is
  * annoying): a slow arpeggio in spooky A harmonic minor (A2 C3 E3 A3
  * G#3 E3 C3, then F3 E3 D3 C3 B2 A2). It stops dead when the game
  * starts. SFX are short table sequences on channel 1 and keep working
