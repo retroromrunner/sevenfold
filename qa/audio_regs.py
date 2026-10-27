@@ -2,7 +2,7 @@
 """SEVENFOLD audio register QA (headless QA cannot hear sound, so this
 asserts the engine is actually wired and running).
 
-Music is TITLE-SCREEN ONLY (round-2 fix: in-game music annoyed Cori).
+Music is TITLE-SCREEN ONLY (round-2 fix: in-game music annoyed the Designer).
 So this script asserts both halves:
 - On the title screen: NR52 sound power on with channel 2 (music)
   active, NR51 routes music (ch2) and SFX (ch1) to both speakers
@@ -17,7 +17,7 @@ So this script asserts both halves:
 Findings from probing: on real hardware AND in PyBoy, NR23/NR24 (freq
 registers) are write-only and read back as masks, so note-by-note
 melody advance cannot be observed headless -- that part is honestly
-left to Cori's ears. The wipe arpeggio likewise cannot be heard
+left to Designer's ears. The wipe arpeggio likewise cannot be heard
 headless; its sequence is asserted only by the fact that room moves
 still complete (wipe.py + playthroughs) and SFX registers behave.
 
