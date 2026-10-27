@@ -1,18 +1,17 @@
 # SEVENFOLD — submit notes (staging only, do NOT submit yet)
 
-- Cori's standing rule: never submit until she playtests and approves the
+- Designer's standing rule: never submit until the Designer playtests and approves the
   exact build.
-- Added constraint (Oct 27, 2026, from Cori): do NOT submit the entry
+- Added constraint (Oct 27, 2026): do NOT submit the entry
   until at least a few other entries have already been submitted to
-  1-BIT JAM 15. She does not want to be the first one in and look AI.
-  Check the jam's entry count before any submit step, and only submit
-  once the field is non-trivial — and only after her playtest approval.
+  1-BIT JAM 15. Check the jam's entry count before any submit step, and only submit
+  once the field is non-trivial — and only after the Designer's playtest approval.
 - Deadline safety rule: aim to submit before noon EST Nov 2 regardless
   of the jam page banner's ambiguous timezone.
 - No submission, upload, or jam-page edit happens from this workspace
-  until Cori explicitly approves the exact build in chat.
+  until Designer explicitly approves the exact build in chat.
 
-## Oct 27 playtest fixes (Cori: "This is great actually!") — applied, re-QA'd
+## Oct 27 playtest fixes (Designer: "This is great actually!") — applied, re-QA'd
 
 Build: releases/sevenfold.gb (32KB, md5 cd0b6c53dbf04b9c41037ad1ec2d94ea),
 staged wrapper refreshed (itch/sevenfold.gb identical md5). Nothing
@@ -22,13 +21,13 @@ published, submitted, or uploaded anywhere.
    channel 2 (Shadowgate-slow), separate from SFX on channel 1 so
    effects never stomp the tune. Headless QA cannot hear it: register
    proof only (qa/audio_regs.py: sound on, ch2 active, music envelope
-   written, routing intact). Music quality is for Cori's ears.
+   written, routing intact). Music quality is for Designer's ears.
 2. Item sprite disappears on pickup: the room map previously redrew
    the item tile forever; draw_room now blanks the tile of any taken
    item. Proven by tilemap reads in qa/item_disappear.py (key tile
    11 -> floor 3 after pickup; same for mirror) plus screenshots
    10-key-gone.png and 11-mirror-gone.png.
-3. Every item required on the critical path (Cori: rope etc. felt
+3. Every item required on the critical path (Designer: rope etc. felt
    unneeded, because rope+candle only opened the optional crypt):
    - The candle now comes from the courtyard well: USE rope at the
      well to haul up a burning candle (signposted: "SOMETHING HANGS
@@ -49,18 +48,18 @@ published, submitted, or uploaded anywhere.
    rumble). Denied SFX wired to every locked/missing-requirement
    message. Register proof in qa/audio_regs.py (NR12 0xF0 while
    sounding, 0x00 when done; NR51 routing untouched). SFX quality
-   and distinctness are for Cori's ears.
+   and distinctness are for Designer's ears.
 5. Proper title screen: the old small castle art is replaced with a
    big horned skull (devil/skeleton) above SEVENFOLD / PRESS START /
    1-BIT JAM 15. The game boots to this screen and waits for Start;
    it is never skipped (QA asserts ST_TITLE at boot and captures
    01-title.png). Title art is two colors only, like everything else.
 
-Still not verified by automation (needs Cori's playtest): music and
+Still not verified by automation (needs Designer's playtest): music and
 SFX quality, puzzle readability, text fit in context, fun, the
 EmulatorJS wrapper in a real browser, real hardware.
 
-## Oct 27 polish: screen wipe transition between rooms (Cori's request)
+## Oct 27 polish: screen wipe transition between rooms (Designer's request)
 
 Build: releases/sevenfold.gb (32KB, md5 8b47eff6391aa9ddbe93f2e7018d8183),
 staged wrapper refreshed (itch/sevenfold.gb identical md5), playtest
@@ -89,9 +88,9 @@ or uploaded anywhere else.
   screenshot 12-wipe-mid.png and post-wipe 13-courtyard-after-wipe.png.
 - Still not verified by automation: how the wipe feels on real
   hardware or in the browser wrapper (frame pacing there is the
-  emulator's), and whether 0.33s feels right to Cori's eye.
+  emulator's), and whether 0.33s feels right to Designer's eye.
 
-## Oct 27 round-2 playtest fixes (Cori: "Pretty good!") — applied, re-QA'd
+## Oct 27 round-2 playtest fixes (Designer: "Pretty good!") — applied, re-QA'd
 
 Build: releases/sevenfold.gb (32KB, md5 f760483f9b10f965828d10cc46cf1ebb),
 staged wrapper refreshed (itch/sevenfold.gb identical md5), playtest
@@ -106,7 +105,7 @@ or uploaded anywhere else.
    (A2 C3 E3 A3 G#3 E3 C3, then F3 E3 D3 C3 B2 A2, ~20s loop). SFX
    still work in-game on channel 1. Proven by register: NR22 reads
    0x70 on title and 0x00 in-room (qa/audio_regs.py). Melody quality
-   is for Cori's ears (freq registers are write-only headless).
+   is for Designer's ears (freq registers are write-only headless).
 2. Castle expanded with 5 new rooms (15 total), each gated on an
    item, integrated between the stair guardian and the vestibule —
    no existing rooms or puzzles removed:
@@ -135,14 +134,14 @@ or uploaded anywhere else.
    frames, matching the ~20-frame wipe), played from enter_room so
    it runs across every room change. Distinct from pickup, unlock,
    sacrifice, and denied SFX. Proven sounding mid-wipe by register
-   (NR12=0xF0) in qa/audio_regs.py; how it feels is for Cori's ears.
+   (NR12=0xF0) in qa/audio_regs.py; how it feels is for Designer's ears.
 - Still not verified by automation: music and transition-sound
   quality, new-puzzle difficulty and readability, text fit in the
   new rooms, fun, the EmulatorJS wrapper in a real browser, real
   hardware.
 
 
-## Design deviation from DESIGN.md (builder's call, Oct 27 — needs Cori's eye)
+## Design deviation from DESIGN.md (builder's call, Oct 27 — needs Designer's eye)
 
 DESIGN.md specified ~5 required sacrifice gates AND endings at 0-2 sins
 (pure) / 3-6 (tainted) / 7 (keeper). Those two specs contradict each
@@ -161,7 +160,7 @@ ending reachable and sacrifices central:
   remaining virtues would fall below remaining required gates) still
   applies. No mechanical effects from sins, per the brief.
 
-## Oct 27 round-3 playtest fixes (Cori: "Very good!") — applied, re-QA'd
+## Oct 27 round-3 playtest fixes (Designer: "Very good!") — applied, re-QA'd
 
 Build: releases/sevenfold.gb (32KB, md5 869216a8e24cd1f3f80dbed2fa9e1ed2),
 staged wrapper refreshed (itch/sevenfold.gb identical md5), playtest
@@ -209,7 +208,7 @@ or uploaded anywhere else.
   new rooms, fun, the EmulatorJS wrapper in a real browser, real
   hardware.
 
-## Oct 27 round-4 playtest fixes (Cori's bug + 3 design upgrades) — applied, re-QA'd
+## Oct 27 round-4 playtest fixes (Designer's bug + 3 design upgrades) — applied, re-QA'd
 
 Build: releases/sevenfold.gb (32KB, ROM ONLY, md5
 0e68af24f6a813336cf7a86df6818831), staged wrapper refreshed
@@ -293,9 +292,9 @@ published, submitted, or uploaded anywhere else.
   quality, new-puzzle difficulty and readability (especially the
   long chasm backtrack and the forge hunt — do the hints read
   clearly?), text fit in the new rooms, fun, the EmulatorJS wrapper
-  in a real browser, real hardware. Those need Cori's playtest.
+  in a real browser, real hardware. Those need Designer's playtest.
 
-## Oct 27 round-5 playtest fixes (Cori) — applied, re-QA'd
+## Oct 27 round-5 playtest fixes (Designer) — applied, re-QA'd
 
 Build: releases/sevenfold.gb (32KB, md5 0ea720437b067789f269c714cf04b8fe),
 staged wrapper refreshed (itch/sevenfold.gb identical md5), playtest
@@ -319,8 +318,8 @@ or uploaded anywhere else. 31 rooms, 18 items, still 32KB ROM ONLY.
    still silences). Proven by register + state: qa/audio_regs.py
    pokes each sin band to the final gate and asserts NR22=0x70
    (channel 2 live) and g_end_track 1/2/3 respectively. Melody
-   quality and per-ending feel are for Cori's ears.
-3. Well/rope order REVERSED per Cori's correction: the well stays
+   quality and per-ending feel are for Designer's ears.
+3. Well/rope order REVERSED per Designer's correction: the well stays
    early in the courtyard; the ROPE moves to a shed at the end of a
    new patio -> garden -> shed chain (all three rooms carry creepy
    look-only scenery: cracked statue, dead roses, stone angel,
@@ -372,4 +371,4 @@ or uploaded anywhere else. 31 rooms, 18 items, still 32KB ROM ONLY.
   (especially the 5-room passage chain and the forge hunt — do the
   hints read clearly?), text fit in the new rooms, fun, the
   EmulatorJS wrapper in a real browser, real hardware. Those need
-  Cori's playtest.
+  Designer's playtest.
