@@ -11,7 +11,7 @@ stay pure, end tainted, or give in completely and become the keeper.
 
 Sins are visual and story only — they never change the mechanics.
 
-![Gameplay](media/gameplay.gif)
+<img src="media/cover.png" width="640" alt="SEVENFOLD title screen">
 
 ## Play
 
