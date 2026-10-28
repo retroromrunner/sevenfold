@@ -372,3 +372,77 @@ or uploaded anywhere else. 31 rooms, 18 items, still 32KB ROM ONLY.
   hints read clearly?), text fit in the new rooms, fun, the
   EmulatorJS wrapper in a real browser, real hardware. Those need
   Designer's playtest.
+
+## Title-theme change (approved demo converted to GB music) — staged, not final
+
+Build: releases/sevenfold.gb (32KB, md5 b885ad1bdf8975af15fda30583073348),
+staged wrapper refreshed (itch/sevenfold.gb identical md5), playtest
+link republished to serve the new build. Nothing published, submitted,
+or uploaded anywhere else. Ending tracks, SFX, wipe sound, and all
+gameplay are exactly as in the round-5 build.
+
+- The title screen's old arpeggio is replaced by the approved demo
+  theme, in the demo's exact notes: an 8-bar A harmonic minor phrase
+  (melody, bass roots, and per-bar harmony), quantized to the
+  engine's frame timing (a beat is 55 frames, ~65 BPM). It loops
+  cleanly and still stops dead when the game starts.
+- Three channels now: melody on pulse channel 2 (50% duty, vol 7),
+  harmony on pulse channel 1 (25% duty, vol 5), bass on the wave
+  channel (triangle table, 50% volume). Routing widened to 0x77 so
+  the wave channel reaches both speakers. In-game silence now mutes
+  all three title channels.
+- Honest difference from the soft demo: the GB version is drier and
+  rawer — no reverb, no lowpass softening, constant volumes with
+  hard note cuts. A GB-accurate preview (parsed straight from the
+  ROM's note tables) lives at music-demo/sevenfold-title-gb-preview.mp3
+  (30.8s); that preview, not the earlier soft demo, is what the
+  title screen actually sounds like.
+- QA: full suite re-run and green on the new ROM (pure, keeper,
+  tainted runs; no_respawn; bridge; map_check; item-disappear;
+  single-use; wipe; pointer; audio registers — extended for the
+  three title channels, the 0x77 routing, all-three-channels
+  silenced in-room, and the tune still playing in loop 2).
+- Still not verified by automation: how the GB version sounds to
+  Designer's ears, and whether it beats the old arpeggio in context.
+  This build awaits Designer's approval before anything is final.
+
+## Music update: composed ending themes + gate sting (title untouched)
+
+Build: releases/sevenfold.gb (32KB, md5 9852f8e587ab8b5db45c91646bbec41e),
+staged wrapper refreshed (itch/sevenfold.gb identical md5), playtest
+link republished to serve the new build. Nothing published, submitted,
+or uploaded anywhere else. Title music, endings text, portraits, sin
+bands, rooms, items, and gameplay are exactly as in the title-music
+build; only the ending tracks and the gate-unlock sound changed.
+
+- Ending tracks rebuilt as full composed 8-bar themes in the same
+  three-channel style as the approved title theme (melody pulse 2,
+  harmony pulse 1, bass wave channel, beat 48 frames, looping):
+  PURE in C major, ascending, resolving home to C; TAINTED in
+  A minor, ending held on the dominant E, unresolved; KEEPER in
+  harmonic minor, melody sinking step by step to a long low A.
+  Each track is clearly distinct from the others.
+- Virtue-gate unlocks now play a short sinister harmonic-minor
+  sting (~2.2s, phrased, not an arpeggio run) instead of the old
+  two-tone sacrifice sound. It plays over the offer message, so it
+  never blocks gameplay. Optional pacts keep the old two-tone
+  sound; pickup, denied, door, unlock, and wipe SFX are unchanged.
+- GB-accurate previews parsed straight from the ROM's note tables
+  (same method as the title preview — no reverb, no lowpass):
+  music-demo/sevenfold-ending-pure-gb-preview.mp3,
+  sevenfold-ending-tainted-gb-preview.mp3,
+  sevenfold-ending-keeper-gb-preview.mp3 (one loop each, ~26.9s),
+  and sevenfold-gate-sting-gb-preview.mp3 (2.3s). Those previews,
+  not any soft demo, are what the game actually sounds like.
+- QA: full suite re-run and green on the new ROM (pure, keeper,
+  tainted runs; no_respawn; bridge; map_check; item-disappear;
+  single-use; wipe; pointer; portrait probe; audio registers —
+  extended to assert all three ending channels plus track
+  selection; new qa/sac_sting.py proves the sting still sounds
+  at ~72 frames, when the old two-tone would be over, and is
+  finished by ~232 frames, with the gate flag set).
+- Still not verified by automation: how the ending themes and the
+  sting feel to Designer's ears, and how the sting sits against
+  the sacrifice text timing in real play (headless QA proves it
+  plays and finishes, not its musical feel). This build awaits
+  Designer's approval before anything is final.

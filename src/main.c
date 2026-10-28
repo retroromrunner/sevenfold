@@ -137,67 +137,226 @@ static void taken_set(uint8_t it) {
     else g_taken2 |= (uint16_t)(1u << (it - 16));
 }
 
-/* --- audio: music on channel 2, SFX on channel 1, ticked once per frame.
- * Frequencies are GB timer values: f = 2048 - 131072 / Hz.
- * Music plays ONLY on the title screen (Designer: in-game music is
- * annoying): a slow arpeggio in spooky A harmonic minor (A2 C3 E3 A3
- * G#3 E3 C3, then F3 E3 D3 C3 B2 A2). It stops dead when the game
+/* --- audio: title music on channels 1+2+3, SFX on channel 1 in-game,
+ * ticked once per frame. Frequencies are GB timer values:
+ * f = 2048 - 131072 / Hz. Music plays ONLY on the title screen
+ * (Designer: in-game music is annoying): the approved title theme,
+ * an 8-bar A harmonic minor phrase in the demo's exact notes —
+ * melody on pulse channel 2, harmony on pulse channel 1, bass on the
+ * wave channel — quantized to the engine's frame timing (a beat is
+ * 55 frames, ~65 BPM). It loops cleanly and stops dead when the game
  * starts. SFX are short table sequences on channel 1 and keep working
  * in-game. Headless QA cannot hear any of this; register activity is
  * asserted in qa/audio_regs.py instead. */
+static const uint16_t title_mel[] = {
+    /* C5 1.5, B4 .5, A4 2 | E4 1, G#4 1, A4 2 */
+    1798, 82, 1783, 28, 1750, 110, 1650, 55, 1732, 55, 1750, 110,
+    /* F4 2, A4 1, C5 1 | B4 1.5, G#4 .5, B4 2 */
+    1673, 110, 1750, 55, 1798, 55, 1783, 82, 1732, 28, 1783, 110,
+    /* C5 2, E5 1, D5 1 | C5 2, A4 1, F4 1 */
+    1798, 110, 1849, 55, 1825, 55, 1798, 110, 1750, 55, 1673, 55,
+    /* G#4 2, B4 2 | A4 4, rest 1 */
+    1732, 110, 1783, 110, 1750, 220, 0, 55, 0, 0
+};
+static const uint16_t title_harm[] = {
+    /* one chord per bar, third then fifth, 2 beats each */
+    1798, 110, 1849, 110,   /* Am: C5 E5 */
+    1798, 110, 1849, 110,   /* Am: C5 E5 */
+    1750, 110, 1798, 110,   /* F:  A4 C5 */
+    1732, 110, 1783, 110,   /* E:  G#4 B4 */
+    1798, 110, 1849, 110,   /* Am: C5 E5 */
+    1750, 110, 1798, 110,   /* F:  A4 C5 */
+    1732, 110, 1783, 110,   /* E:  G#4 B4 */
+    1798, 110, 1849, 110,   /* Am: C5 E5 */
+    0, 55, 0, 0
+};
+static const uint16_t title_bass[] = {
+    /* root twice per bar, 2 beats each */
+    856, 110, 856, 110,     /* A2 */
+    856, 110, 856, 110,     /* A2 */
+    547, 110, 547, 110,     /* F2 */
+    458, 110, 458, 110,     /* E2 */
+    856, 110, 856, 110,     /* A2 */
+    547, 110, 547, 110,     /* F2 */
+    458, 110, 458, 110,     /* E2 */
+    856, 110, 856, 110,     /* A2 */
+    0, 55, 0, 0
+};
+/* Triangle wave table for the bass (32 4-bit samples, packed). */
+static const uint8_t bass_wave[16] = {
+    0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
+    0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10
+};
 static const uint16_t music_seq[] = {
-    856, 64, 1046, 64, 1253, 64, 1452, 96,
-    1417, 64, 1253, 64, 1046, 96, 0, 32,
-    1297, 64, 1253, 64, 1155, 64, 1046, 96,
-    986, 64, 856, 128, 0, 48, 0, 0
+    0, 0 /* placeholder: the title tune lives in title_* above */
 };
-/* Round-5 ending tracks, played on the final screen (the only music
-   besides the title tune). Each loops until the player leaves the
-   ending screen. PURE: an ascending C-major run that resolves back
-   home (bright, finished). KEEPER: a harmonic-minor line that sinks
-   step by step to a long low A (dark, sinking). TAINTED: an A-minor
-   line that ends on the dominant E and stays there, neither resolved
-   nor sunk. Note values use the same GB timer formula as the title
-   tune (C4 1547, D4 1602, E4 1650, F4 1673, G4 1714, A4 1750,
-   C5 1798; A3 1452, G#3 1417, F3 1297, E3 1253, D3 1155, C3 1046,
-   B2 986, A2 856). */
-static const uint16_t end_pure[] = {
-    1547, 24, 1602, 24, 1650, 24, 1673, 24, 1714, 24, 1750, 24,
-    1798, 48, 1714, 24, 1650, 24, 1547, 64, 0, 0
+/* Sentinel marking "an ending track is playing" for music_tick;
+   the actual ending tables are selected by do_ending. */
+static const uint16_t end_seq[] = { 0, 0 };
+/* Ending tracks, same three-channel treatment as the approved title
+   theme: phrased melody (pulse 2, 50% duty, vol 7) + per-bar harmony
+   (pulse 1, 25% duty, vol 5) + bass roots (wave channel, triangle
+   table). A beat is 48 frames (~75 BPM); each theme is 8 bars and
+   loops on its ending screen. PURE: C major, ascending, resolves
+   home to C. TAINTED: A minor, ends held on the dominant E —
+   unresolved. KEEPER: harmonic minor, melody sinking step by step
+   to a long low A. Note values use the same GB timer formula as the
+   title tune (C2 44, E2 458, F2 547, G2 711, A2 856, B2 986,
+   C3 1046, D3 1155, E3 1253, F3 1297, G#3 1417, A3 1452, B3 1517,
+   C4 1547, D4 1602, E4 1650, F4 1673, G4 1714, G#4 1732, A4 1750,
+   B4 1783, C5 1798, D5 1825, E5 1849). */
+static const uint16_t end_pure_mel[] = {
+    1650, 72, 1714, 24, 1798, 96,
+    1673, 96, 1750, 48, 1798, 48,
+    1602, 48, 1714, 48, 1783, 96,
+    1798, 96, 1849, 48, 1825, 48,
+    1849, 72, 1825, 24, 1798, 96,
+    1750, 96, 1673, 48, 1750, 48,
+    1783, 96, 1825, 96,
+    1798, 192, 0, 48, 0, 0
 };
-static const uint16_t end_tainted[] = {
-    1452, 24, 1547, 24, 1602, 24, 1650, 48,
-    1602, 24, 1547, 24, 1650, 64, 0, 0
+static const uint16_t end_pure_harm[] = {
+    1650, 96, 1714, 96, 1750, 96, 1798, 96,
+    1783, 96, 1825, 96, 1650, 96, 1714, 96,
+    1650, 96, 1714, 96, 1750, 96, 1798, 96,
+    1783, 96, 1825, 96, 1650, 96, 1714, 96,
+    0, 48, 0, 0
 };
-static const uint16_t end_keeper[] = {
-    1452, 24, 1417, 24, 1297, 24, 1253, 24,
-    1155, 24, 1046, 24, 986, 24, 856, 64, 0, 0
+static const uint16_t end_pure_bass[] = {
+    44, 96, 44, 96, 547, 96, 547, 96,
+    711, 96, 711, 96, 44, 96, 44, 96,
+    44, 96, 44, 96, 547, 96, 547, 96,
+    711, 96, 711, 96, 44, 96, 44, 96,
+    0, 48, 0, 0
+};
+static const uint16_t end_tainted_mel[] = {
+    1750, 96, 1798, 48, 1849, 48,
+    1673, 72, 1750, 24, 1798, 96,
+    1732, 96, 1783, 96,
+    1750, 96, 1849, 48, 1825, 48,
+    1798, 96, 1783, 48, 1750, 48,
+    1798, 96, 1750, 96,
+    1783, 96, 1732, 96,
+    1849, 192, 0, 48, 0, 0
+};
+static const uint16_t end_tainted_harm[] = {
+    1798, 96, 1849, 96, 1750, 96, 1798, 96,
+    1732, 96, 1783, 96, 1798, 96, 1849, 96,
+    1798, 96, 1849, 96, 1750, 96, 1798, 96,
+    1732, 96, 1783, 96, 1732, 96, 1783, 96,
+    0, 48, 0, 0
+};
+static const uint16_t end_tainted_bass[] = {
+    856, 96, 856, 96, 547, 96, 547, 96,
+    458, 96, 458, 96, 856, 96, 856, 96,
+    856, 96, 856, 96, 547, 96, 547, 96,
+    458, 96, 458, 96, 458, 96, 458, 96,
+    0, 48, 0, 0
+};
+static const uint16_t end_keeper_mel[] = {
+    1849, 96, 1825, 48, 1798, 48,
+    1783, 96, 1750, 48, 1732, 48,
+    1750, 96, 1673, 96,
+    1650, 96, 1602, 96,
+    1547, 96, 1517, 96,
+    1452, 96, 1417, 96,
+    1452, 96, 1297, 96,
+    856, 192, 0, 48, 0, 0
+};
+static const uint16_t end_keeper_harm[] = {
+    1798, 96, 1849, 96, 1732, 96, 1783, 96,
+    1798, 96, 1849, 96, 1732, 96, 1783, 96,
+    1798, 96, 1849, 96, 1732, 96, 1783, 96,
+    1798, 96, 1849, 96, 1798, 96, 1849, 96,
+    0, 48, 0, 0
+};
+static const uint16_t end_keeper_bass[] = {
+    856, 96, 856, 96, 458, 96, 458, 96,
+    856, 96, 856, 96, 458, 96, 458, 96,
+    856, 96, 856, 96, 458, 96, 458, 96,
+    856, 96, 856, 96, 856, 96, 856, 96,
+    0, 48, 0, 0
 };
 static const uint16_t *mus_seq_cur = music_seq;
 static uint8_t mus_idx, mus_timer, mus_on = 1;
-static void music_tick(void) {
+/* Title-track player state (three parallel sequences). */
+static uint8_t tit_mel_idx, tit_mel_timer;
+static uint8_t tit_harm_idx, tit_harm_timer;
+static uint8_t tit_bass_idx, tit_bass_timer;
+/* Ending-track player state (same three-channel engine, tables
+   selected by do_ending). Declared here, after all WRAM globals, so
+   no existing WRAM address shifts. */
+static const uint16_t *end_mel_cur, *end_harm_cur, *end_bass_cur;
+static uint8_t end_mel_idx, end_mel_timer;
+static uint8_t end_harm_idx, end_harm_timer;
+static uint8_t end_bass_idx, end_bass_timer;
+/* One title-track channel: chan 2 = melody (pulse, duty 50%, vol 7),
+   chan 1 = harmony (pulse, duty 25%, vol 5), chan 3 = bass (wave). */
+static void title_chan(const uint16_t *seq, uint8_t *idx, uint8_t *timer,
+                       uint8_t chan) {
     uint16_t f;
     uint8_t l;
-    if (!mus_on) return;
-    if (mus_timer) { mus_timer--; return; }
-    f = mus_seq_cur[mus_idx];
-    l = (uint8_t)mus_seq_cur[mus_idx + 1];
-    if (!l) { mus_idx = 0; return; }
-    if (!f) { NR22_REG = 0x00; }
-    else {
-        NR21_REG = 0x80;
-        NR22_REG = 0x70;
-        NR23_REG = (uint8_t)f;
-        NR24_REG = 0x80 | (uint8_t)(f >> 8);
+    if (*timer) { (*timer)--; return; }
+    f = seq[*idx];
+    l = (uint8_t)seq[*idx + 1];
+    if (!l) { *idx = 0; return; }
+    if (chan == 2) {
+        if (!f) NR22_REG = 0x00;
+        else {
+            NR21_REG = 0x80;
+            NR22_REG = 0x70;
+            NR23_REG = (uint8_t)f;
+            NR24_REG = 0x80 | (uint8_t)(f >> 8);
+        }
+    } else if (chan == 1) {
+        if (!f) NR12_REG = 0x00;
+        else {
+            NR11_REG = 0x40;
+            NR12_REG = 0x50;
+            NR13_REG = (uint8_t)f;
+            NR14_REG = 0x80 | (uint8_t)(f >> 8);
+        }
+    } else {
+        if (!f) NR32_REG = 0x00;
+        else {
+            NR30_REG = 0x80;
+            NR32_REG = 0x20;
+            NR33_REG = (uint8_t)f;
+            NR34_REG = 0x80 | (uint8_t)(f >> 8);
+        }
     }
-    mus_timer = l;
-    mus_idx += 2;
+    *timer = l;
+    *idx += 2;
+}
+static void music_tick(void) {
+    if (!mus_on) return;
+    /* Title screen: the three-channel theme. Ending screens: the
+       selected ending's three-channel theme, same engine. */
+    if (mus_seq_cur == music_seq) {
+        title_chan(title_mel, &tit_mel_idx, &tit_mel_timer, 2);
+        title_chan(title_harm, &tit_harm_idx, &tit_harm_timer, 1);
+        title_chan(title_bass, &tit_bass_idx, &tit_bass_timer, 3);
+        return;
+    }
+    title_chan(end_mel_cur, &end_mel_idx, &end_mel_timer, 2);
+    title_chan(end_harm_cur, &end_harm_idx, &end_harm_timer, 1);
+    title_chan(end_bass_cur, &end_bass_idx, &end_bass_timer, 3);
 }
 
 /* SFX sequences: pairs of (freq, frames), terminated by a zero length. */
 static const uint16_t sfx_pickup[]    = {1849, 6, 1899, 12, 0, 0};
 static const uint16_t sfx_unlock[]    = {1547, 6, 1650, 6, 1714, 14, 0, 0};
 static const uint16_t sfx_sacrifice[] = {1452, 10, 857, 20, 0, 0};
+/* Virtue-gate unlock sting: a short sinister harmonic-minor phrase
+   for the moment a required gate opens on a sacrifice — a dark
+   bargain being sealed. Phrased (short-short-long, rise, fall back
+   to the tonic), ~2.2 seconds, played over the offer message so it
+   never blocks gameplay. Optional pacts keep the old two-tone
+   sfx_sacrifice; only required-gate unlocks get the sting. */
+static const uint16_t sfx_gate_sting[] = {
+    1750, 15, 1732, 10, 1750, 20, 1798, 15,
+    1783, 15, 1732, 20, 1750, 30, 0, 0
+};
 static const uint16_t sfx_denied[]    = {300, 10, 120, 16, 0, 0};
 /* Room-change wipe sound: a longer rising scale run in harmonic minor,
    ~22 frames to match the ~20-frame column wipe, Shadowgate-style.
@@ -824,7 +983,13 @@ static void confirm_sacrifice(void) {
     uint8_t v = sac_list[g_sac_sel];
     g_virtues &= (uint8_t)~(1 << v);
     g_sins++;
-    sfx_play(sfx_sacrifice);
+    if (g_pending_is_pact) {
+        sfx_play(sfx_sacrifice);
+    } else {
+        /* Required gate: the sinister unlock sting, not the old
+           two-tone sacrifice sound. */
+        sfx_play(sfx_gate_sting);
+    }
     if (g_pending_is_pact) {
         g_pacts |= (1 << g_pending_id);
         draw_room();
@@ -857,23 +1022,34 @@ static void do_ending(void) {
     for (r = 0; r < msg_nlines && r < 17; r++)
         draw_str(0, r, msg_lines[r]);
     draw_str(0, 17, "PRESS START");
-    /* Round-5: the final screen gets its own music, matched to the
-       ending — major and resolving for pure, minor and unresolved
-       for tainted, harmonic-minor and sinking for the keeper. The
-       track loops until the player leaves the screen. */
+    /* The final screen gets its own composed theme, matched to the
+       ending and in the same three-channel style as the title theme
+       — major and resolving for pure, minor and unresolved for
+       tainted, harmonic-minor and sinking for the keeper. The track
+       loops until the player leaves the screen. */
     if (g_sins >= 7) {
-        mus_seq_cur = end_keeper;
+        end_mel_cur = end_keeper_mel;
+        end_harm_cur = end_keeper_harm;
+        end_bass_cur = end_keeper_bass;
         g_end_track = 3;
     } else if (g_sins >= 3) {
-        mus_seq_cur = end_tainted;
+        end_mel_cur = end_tainted_mel;
+        end_harm_cur = end_tainted_harm;
+        end_bass_cur = end_tainted_bass;
         g_end_track = 2;
     } else {
-        mus_seq_cur = end_pure;
+        end_mel_cur = end_pure_mel;
+        end_harm_cur = end_pure_harm;
+        end_bass_cur = end_pure_bass;
         g_end_track = 1;
     }
+    mus_seq_cur = end_seq;
     mus_on = 1;
     mus_idx = 0;
     mus_timer = 0;
+    end_mel_idx = 0; end_mel_timer = 0;
+    end_harm_idx = 0; end_harm_timer = 0;
+    end_bass_idx = 0; end_bass_timer = 0;
     g_state = ST_END;
     move_sprite(0, 200, 200);
 }
@@ -1254,11 +1430,14 @@ static void draw_title(void) {
     draw_str(4, 15, "1-BIT JAM 15");
     draw_str(0, 16, "D-PAD: CHOOSE A: ACT");
     move_sprite(0, 200, 200);
-    /* Title screen owns the music: restart the arpeggio here. */
+    /* Title screen owns the music: restart the title theme here. */
     mus_seq_cur = music_seq;
     mus_on = 1;
     mus_idx = 0;
     mus_timer = 0;
+    tit_mel_idx = 0; tit_mel_timer = 0;
+    tit_harm_idx = 0; tit_harm_timer = 0;
+    tit_bass_idx = 0; tit_bass_timer = 0;
 }
 
 static void reset_game(void) {
@@ -1294,10 +1473,13 @@ void main(void) {
     set_sprite_tile(0, SPR_CURSOR_TILE);
     BGP_REG = 0xE4;
     OBP0_REG = 0xFC;
-    /* Sound on: music on channel 2, SFX on channel 1, both speakers. */
+    /* Sound on: title music on channels 1+2+3, SFX on channel 1,
+       all routed to both speakers. */
     NR52_REG = 0x80;
-    NR51_REG = 0x33;
+    NR51_REG = 0x77;
     NR50_REG = 0x77;
+    /* Load the triangle wave table for the title bass. */
+    { uint8_t w; for (w = 0; w < 16; w++) AUD3WAVE[w] = bass_wave[w]; }
     SHOW_BKG;
     SHOW_SPRITES;
     DISPLAY_ON;
@@ -1315,9 +1497,12 @@ void main(void) {
         switch (g_state) {
             case ST_TITLE:
                 if (newpad & J_START) {
-                    /* Music stops dead when the game starts. */
+                    /* Music stops dead when the game starts: silence
+                       all three title channels, not just the melody. */
                     mus_on = 0;
                     NR22_REG = 0x00;
+                    NR12_REG = 0x00;
+                    NR32_REG = 0x00;
                     reset_game();
                     enter_room(0);
                     show_message("YOU ENTER THE CASTLE. THE GATE SHUTS "

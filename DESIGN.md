@@ -104,16 +104,26 @@ Mini Shadowgate-style first-person castle crawler. You are a pilgrim who enters 
   Linear-ish with small branches; every room reachable, every puzzle
   solvable, every ending reachable. Text must be complete and
   proofread in-game (no placeholder text).
-- Audio: TITLE SCREEN ONLY — a slow arpeggio in spooky A harmonic
-  minor on sound channel 2 (round-2 fix: in-game music annoyed the Designer;
-  it stops dead when the game starts). Distinct table-driven SFX on
-  channel 1 (pickup, unlock, sacrifice, denied, and a rising
-  harmonic-minor scale run across the room-change wipe). Round-5:
-  the FINAL SCREEN plays its own looping channel-2 track per ending
-  (pure ascending major, tainted minor unresolved, keeper
-  harmonic-minor descending). Headless QA asserts register activity
-  and track selection only; music/SFX quality is judged by Designer's
-  ears.
+- Audio: TITLE SCREEN ONLY — the approved title theme, an 8-bar
+  A harmonic minor phrase (melody on pulse channel 2, harmony on
+  pulse channel 1, bass on the wave channel; title-only change,
+  in-game music stays off and it stops dead when the game starts).
+  Distinct table-driven SFX on channel 1 (pickup, unlock, sacrifice,
+  denied, and a rising harmonic-minor scale run across the
+  room-change wipe). Round-5: the FINAL SCREEN plays its own
+  looping track per ending (pure ascending major, tainted
+  minor unresolved, keeper harmonic-minor descending). Music update
+  (approved title-theme style): each ending track is now a full
+  composed 8-bar theme in the same three-channel style as the title
+  theme (phrased melody + per-bar harmony + bass roots, ~75 BPM,
+  looping) — pure in C major resolving home, tainted in A minor
+  held on the dominant E, keeper in harmonic minor sinking to a
+  long low A. Required-gate sacrifices play a short (~2.2s)
+  sinister harmonic-minor sting instead of the old two-tone
+  sacrifice sound; optional pacts keep the old sound, and all
+  other SFX are unchanged. Headless QA
+  asserts register activity and track selection only; music/SFX
+  quality is judged by Designer's ears.
 - Cursor: the hotspot pointer sits immediately left of its tile,
   edge touching edge (GBDK move_sprite coords are screen-minus-8/16,
   which previously floated the diamond a tile left and two up).
