@@ -1,5 +1,10 @@
 #!/bin/bash
 # Build SEVENFOLD. Produces releases/sevenfold.gb (plain 32KB ROM).
+# MBC5 was tried for the 1.1 backtrack locks and REVERTED: GBDK
+# non-banked code still has to fit the 32KB address window, so the
+# MBC5 build stalled at the title-to-game transition in PyBoy QA
+# (code overflowed past 0x8000). The locks therefore fit by trimming
+# message text instead; see the trim notes in src/main.c comments.
 set -e
 cd "$(dirname "$0")"
 python3 gen_tiles.py

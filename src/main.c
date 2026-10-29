@@ -40,9 +40,19 @@
 #define LK_OBSIDIAN 11
 #define LK_BRIDGE 12
 #define LK_HORNKEY 13
+#define LK_ICEKEY 15
+#define LK_GEM 16
+#define LK_RIDDLE 17
+#define LK_KNIGHT 18
 /* LK_CHART is a TAKE lock, not a door lock: the library prism can only
-   be taken while carrying the star chart (consumed on the take). */
+   be taken while carrying the star chart (consumed on the take).
+   LK_STARKEY / LK_DROWNEDKEY are the same pattern for the 1.1
+   backtrack locks: the Observatory Moonstone needs the Star Key
+   (Sunken Chapel), the Pantry Blade needs the Drowned Key (Slot
+   Hall), each consumed on its take. */
 #define LK_CHART 14
+#define LK_STARKEY 19
+#define LK_DROWNEDKEY 20
 
 /* gate requirements */
 #define RQ_NONE   0
@@ -61,6 +71,10 @@
 #define USE_COFFER 6
 #define USE_WOOD   7
 #define USE_FORGE  8
+#define USE_POOL   9
+#define USE_GEMSLOT 10
+#define USE_RIDDLE 11
+#define USE_KNIGHT 12
 
 /* items (18): every one is required on the critical path, each consumed
    at exactly one obstacle. Item/obstacle mapping:
@@ -90,6 +104,21 @@
 #define IT_FINALKEY 15
 #define IT_CHART  16
 #define IT_LOFTKEY 17
+/* 1.1 Drowned Wing items (18-25, in g_items2 bits 2-9): MOONSTONE is
+   found in the Observatory, BLADE in the Pantry, TORCH in the Torch
+   Vault, GEM in the Gem Gallery, SEAL in the Seal Chamber; ICEKEY is
+   yielded by melting the frozen pool with the torch. STARKEY is
+   found in the Sunken Chapel and unlocks the Moonstone take;
+   DROWNEDKEY is found in the Slot Hall and unlocks the Blade take.
+   Each is used exactly once, like every other item. */
+#define IT_MOONSTONE 18
+#define IT_TORCH  19
+#define IT_ICEKEY 20
+#define IT_GEM    21
+#define IT_BLADE  22
+#define IT_SEAL   23
+#define IT_STARKEY 24
+#define IT_DROWNEDKEY 25
 
 /* WRAM state (non-static so the linker map exposes them for PyBoy QA).
  * g_taken is the ROUND-4 bug fix: it records every item ever taken
@@ -112,6 +141,8 @@ uint8_t g_coffer_used, g_tree_felled;
    3 keeper) so headless QA can prove the right track per sin band. */
 uint16_t g_items2, g_taken2;
 uint8_t g_end_track;
+/* 1.1 Drowned Wing flags, appended so existing WRAM addresses do not shift. */
+uint8_t g_pool_melted, g_gem_used, g_riddle_used, g_knight_used;
 
 /* Round-5 item helpers: items 0-15 live in g_items/g_taken, items 16+
    in g_items2/g_taken2. Everything that touches an arbitrary item id
@@ -388,30 +419,45 @@ static void sfx_tick(void) {
     sfx_idx += 2;
 }
 
-static const char * const virtue_names[7] = {
+static const char * const virtue_names[8] = {
     "HUMILITY", "PATIENCE", "CHARITY", "TEMPERANCE",
-    "CHASTITY", "DILIGENCE", "KINDNESS"
+    "CHASTITY", "DILIGENCE", "KINDNESS", "HOPE"
 };
-static const char * const sin_names[7] = {
-    "PRIDE", "WRATH", "GREED", "GLUTTONY", "LUST", "SLOTH", "ENVY"
+static const char * const sin_names[8] = {
+    "PRIDE", "WRATH", "GREED", "GLUTTONY", "LUST", "SLOTH", "ENVY", "DESPAIR"
 };
-static const char * const item_short_names[18] = {
+static const char * const item_short_names[26] = {
     "KEY", "ROPE", "CANDLE", "MIRROR", "BELL", "LADDER",
     "AXE", "PRISM", "OIL", "HORN", "OBSIDIAN", "SUNSTONE",
     "WOOD", "KEY BOW", "KEY STEM", "FINAL KEY",
-    "STAR CHART", "LOFT KEY"
+    "STAR CHART", "LOFT KEY",
+    "MOONSTONE", "TORCH", "ICE KEY", "PALE GEM", "BLADE", "KEEPER'S SEAL",
+    "STAR KEY", "DROWNED KEY"
 };
-static const char * const take_msgs[18] = {
-    "TAKEN: RUSTY KEY.", "TAKEN: COILED ROPE. THE WELL IN THE "
-    "COURTYARD COULD USE THIS.", "TAKEN: CANDLE.",
+/* 32KB-fit trims (backtrack-lock build): the Star/Drowned Key take
+   messages are bare ("TAKEN: STAR KEY." / "TAKEN: DROWNED KEY."),
+   and the Moonstone, Pale Gem, Blade, Torch, Rope, Chart, Loft Key
+   and Horn take messages lost their destination hints — those hints
+   survive in the take-denial messages, the use/door denials, and
+   the shield/tablet looks, so no puzzle signposting is lost.
+   MBC5 was tried and reverted: GBDK non-banked code must still fit
+   the 32KB window (code + the trailing HOME segment). */
+static const char * const take_msgs[26] = {
+    "TAKEN: RUSTY KEY.", "TAKEN: COILED ROPE.", "TAKEN: CANDLE.",
     "TAKEN: HAND MIRROR.", "TAKEN: SILVER BELL.", "TAKEN: LADDER.",
     "TAKEN: AXE.", "TAKEN: PRISM.", "TAKEN: OIL FLASK.",
-    "TAKEN: CHOIR HORN. THE GATEKEEPER IN THE ECHO HALL SLEEPS.",
+    "TAKEN: CHOIR HORN.",
     "TAKEN: OBSIDIAN KEY.", "TAKEN: SUNSTONE.",
     "TAKEN: DEAD WOOD.", "TAKEN: KEY BOW.", "TAKEN: KEY STEM.",
-    "TAKEN: FINAL KEY.", "TAKEN: STAR CHART. IT MARKS A PRISM "
-    "HIDDEN IN THE LIBRARY.", "TAKEN: LOFT KEY. IT SHOULD OPEN "
-    "THE CHOIR LOFT."
+    "TAKEN: FINAL KEY.", "TAKEN: STAR CHART.",
+    "TAKEN: LOFT KEY.",
+    "TAKEN: MOONSTONE. IT GLOWS WITHOUT FIRE.",
+    "TAKEN: EMBER TORCH.",
+    "TAKEN: ICE KEY.", "TAKEN: PALE GEM.",
+    "TAKEN: SILVER BLADE.",
+    "TAKEN: KEEPER'S SEAL. THE FINAL GATE WILL KNOW YOU.",
+    "TAKEN: STAR KEY.",
+    "TAKEN: DROWNED KEY."
 };
 static const char * const pact_msgs[5] = {
     "THE PORTRAIT WHISPERS: 'ONLY A PURE TONE STIRS THE GUARDIAN.'",
@@ -420,9 +466,9 @@ static const char * const pact_msgs[5] = {
     "THE SHRINE SHOWS YOU YOUR OWN FACE, SMILING WITHOUT YOU.",
     "YOU KNEEL. THE THRONE REMEMBERS THE WEIGHT OF YOU."
 };
-static const uint8_t gate_target[5] = {5, 7, 8, 9, 255};
+static const uint8_t gate_target[5] = {5, 7, 42, 9, 255};
 static const uint8_t gate_req[5] = {
-    RQ_NONE, RQ_NONE, RQ_MIRROR, RQ_BELL, RQ_NONE
+    RQ_NONE, RQ_NONE, RQ_NONE, RQ_BELL, RQ_NONE
 };
 
 typedef struct {
@@ -503,6 +549,7 @@ static const Hotspot hs_observatory[] = {
     {9, 8, HS_DOOR, 11, LK_LENS, "LENS GATE", ""},
     {9, 10, HS_DOOR, 8, 0, "STAIR DOOR", ""},
     {3, 8, HS_DOOR, 22, 0, "CHART ROOM DOOR", ""},
+    {16, 2, HS_TAKE, IT_MOONSTONE, LK_STARKEY, "MOONSTONE", ""},
 };
 static const Hotspot hs_chasm[] = {
     {10, 5, HS_USE, USE_WOOD, 0, "THE CHASM GAP", ""},
@@ -535,6 +582,7 @@ static const Hotspot hs_reliquary[] = {
     {3, 4, HS_LOOK, 0, 0, "VOTIVE FLAME",
      "THE FLAME DOES NOT FLICKER. IT WATCHES."},
     {9, 10, HS_DOOR, 13, 0, "ECHO DOOR", ""},
+    {16, 7, HS_DOOR, 31, 0, "DROWNED WING DOOR", ""},
 };
 static const Hotspot hs_smithy[] = {
     {3, 2, HS_TAKE, IT_BOW, 0, "KEY BOW", ""},
@@ -550,6 +598,7 @@ static const Hotspot hs_pantry[] = {
      "THE SHELVES ARE BARE. A LARDER DOOR LEADS DEEPER."},
     {16, 7, HS_DOOR, 3, 0, "KITCHEN DOOR", ""},
     {9, 8, HS_DOOR, 29, 0, "LARDER DOOR", ""},
+    {3, 2, HS_TAKE, IT_BLADE, LK_DROWNEDKEY, "SILVER BLADE", ""},
 };
 static const Hotspot hs_armory[] = {
     {3, 2, HS_TAKE, IT_AXE, 0, "AXE", ""},
@@ -631,23 +680,103 @@ static const Hotspot hs_cellar[] = {
      "WINE CASKS, LONG SOURED. SOMETHING ELSE LIVES DOWN HERE NOW."},
     {9, 10, HS_DOOR, 29, 0, "LARDER DOOR", ""},
 };
-static const Hotspot * const hs_rooms[31] = {
+
+static const Hotspot hs_wing_ante[] = {
+    {3, 4, HS_LOOK, 0, 0, "DROWNED BANNER",
+     "THE BANNER IS SOAKED THROUGH. THE OBSERVATORY HOLDS A RIDDLE'S ANSWER."},
+    {9, 8, HS_DOOR, 32, 0, "FLOODED GALLERY DOOR", ""},
+    {9, 10, HS_DOOR, 14, 0, "RELIQUARY DOOR", ""},
+};
+static const Hotspot hs_wing_gallery[] = {
+    {3, 4, HS_LOOK, 0, 0, "FLOODED TAPESTRY",
+     "THE TAPESTRY HANGS HEAVY WITH WATER."},
+    {9, 8, HS_DOOR, 33, 0, "SUNKEN CHAPEL DOOR", ""},
+    {9, 10, HS_DOOR, 31, 0, "ANTECHAMBER DOOR", ""},
+    {16, 7, HS_DOOR, 36, 0, "TORCH VAULT DOOR", ""},
+};
+static const Hotspot hs_wing_chapel[] = {
+    {3, 4, HS_LOOK, 0, 0, "SUNKEN ALTAR",
+     "THE ALTAR STANDS IN WATER."},
+    {9, 8, HS_DOOR, 34, 0, "WELL CHAMBER DOOR", ""},
+    {9, 10, HS_DOOR, 32, 0, "GALLERY DOOR", ""},
+    {3, 2, HS_TAKE, IT_STARKEY, 0, "STAR KEY", ""},
+};
+static const Hotspot hs_wing_well[] = {
+    {9, 8, HS_DOOR, 35, 0, "ICE CHAMBER DOOR", ""},
+    {9, 10, HS_DOOR, 33, 0, "CHAPEL DOOR", ""},
+};
+static const Hotspot hs_wing_ice[] = {
+    {9, 2, HS_USE, USE_POOL, 0, "FROZEN POOL", ""},
+    {9, 8, HS_DOOR, 38, LK_ICEKEY, "ICE DOOR", ""},
+    {9, 10, HS_DOOR, 34, 0, "WELL CHAMBER DOOR", ""},
+};
+static const Hotspot hs_wing_torch[] = {
+    {3, 2, HS_TAKE, IT_TORCH, 0, "EMBER TORCH", ""},
+    {9, 10, HS_DOOR, 32, 0, "GALLERY DOOR", ""},
+};
+static const Hotspot hs_wing_gem[] = {
+    {3, 2, HS_TAKE, IT_GEM, 0, "PALE GEM", ""},
+    {9, 10, HS_DOOR, 38, 0, "SLOT HALL DOOR", ""},
+};
+static const Hotspot hs_wing_slot[] = {
+    {9, 2, HS_USE, USE_GEMSLOT, 0, "GEM SLOT", ""},
+    {9, 8, HS_DOOR, 39, LK_GEM, "HIDDEN DOOR", ""},
+    {9, 10, HS_DOOR, 35, 0, "ICE CHAMBER DOOR", ""},
+    {16, 7, HS_DOOR, 37, 0, "GEM GALLERY DOOR", ""},
+    {3, 2, HS_TAKE, IT_DROWNEDKEY, 0, "DROWNED KEY", ""},
+};
+static const Hotspot hs_wing_riddle[] = {
+    {9, 2, HS_USE, USE_RIDDLE, 0, "RIDDLE GUARDIAN", ""},
+    {3, 4, HS_LOOK, 0, 0, "RIDDLE TABLET",
+     "THE TABLET READS: 'WHAT GLOWS WITHOUT FIRE?' THE OBSERVATORY HOLDS THE ANSWER."},
+    {9, 8, HS_DOOR, 40, LK_RIDDLE, "RIDDLE DOOR", ""},
+    {9, 10, HS_DOOR, 38, 0, "SLOT HALL DOOR", ""},
+};
+static const Hotspot hs_wing_knight[] = {
+    {9, 2, HS_USE, USE_KNIGHT, 0, "DROWNED KNIGHT", ""},
+    {3, 4, HS_LOOK, 0, 0, "KNIGHT'S SHIELD",
+     "THE KNIGHT DOES NOT MOVE. A BLADE WAITS IN THE PANTRY, "
+     "LOCKED."},
+    {9, 8, HS_DOOR, 41, LK_KNIGHT, "KNIGHT'S DOOR", ""},
+    {9, 10, HS_DOOR, 39, 0, "RIDDLE HALL DOOR", ""},
+};
+static const Hotspot hs_wing_hope[] = {
+    {9, 2, HS_GATE, 2, 0, "SEAL OF HOPE", ""},
+    {3, 4, HS_LOOK, 0, 0, "HOPE'S FLAME",
+     "A FLAME THAT NEVER WENT OUT. THE SEAL DEMANDS HOPE, AND DESPAIR TAKES ITS PLACE."},
+    {9, 10, HS_DOOR, 40, 0, "KNIGHT'S GUARD DOOR", ""},
+};
+static const Hotspot hs_wing_ante2[] = {
+    {3, 4, HS_LOOK, 0, 0, "KEEPER'S DESK",
+     "THE DESK WARNS: 'THE LAST DOOR OPENS ONLY FOR ONE WHO BEARS THE SEAL.'"},
+    {9, 8, HS_DOOR, 43, 0, "SEAL CHAMBER DOOR", ""},
+    {9, 10, HS_DOOR, 41, 0, "HOPE CHAPEL DOOR", ""},
+};
+static const Hotspot hs_wing_seal[] = {
+    {3, 2, HS_TAKE, IT_SEAL, 0, "KEEPER'S SEAL", ""},
+    {9, 10, HS_DOOR, 42, 0, "ANTECHAMBER DOOR", ""},
+};
+
+static const Hotspot * const hs_rooms[44] = {
     hs_gatehouse, hs_courtyard, hs_hall, hs_kitchen, hs_library,
     hs_chapel, hs_crypt, hs_gallery, hs_stair, hs_vestibule,
     hs_observatory, hs_chasm, hs_archive, hs_echo, hs_reliquary,
     hs_smithy, hs_belfry, hs_pantry, hs_armory,
     hs_patio, hs_garden, hs_shed, hs_chartroom, hs_choir,
     hs_pass1, hs_pass2, hs_pass3, hs_pass4, hs_deepcell,
-    hs_larder, hs_cellar
+    hs_larder, hs_cellar,
+    hs_wing_ante, hs_wing_gallery, hs_wing_chapel, hs_wing_well,
+    hs_wing_ice, hs_wing_torch, hs_wing_gem, hs_wing_slot,
+    hs_wing_riddle, hs_wing_knight, hs_wing_hope, hs_wing_ante2, hs_wing_seal
 };
-static const uint8_t hs_counts[31] = {3, 5, 4, 4, 3, 5, 5, 6, 3, 3, 5, 4, 4, 7, 4, 3, 2, 3, 2, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
+static const uint8_t hs_counts[44] = {3, 5, 4, 4, 3, 5, 5, 6, 3, 3, 6, 4, 4, 7, 5, 3, 2, 4, 2, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 2, 3, 2, 2, 5, 4, 4, 3, 3, 2};
 
 /* message paging */
 #define MSG_MAX_LINES 40
 static char msg_lines[MSG_MAX_LINES][21];
 static uint8_t msg_nlines, msg_page;
 static char msg_buf[120];
-static uint8_t sac_list[7], sac_count;
+static uint8_t sac_list[8], sac_count;
 
 static uint8_t glyph_idx(char c) {
     if (c >= 'A' && c <= 'Z') return (uint8_t)(c - 'A');
@@ -920,22 +1049,32 @@ static void enter_room(uint8_t r) {
 }
 
 static uint8_t gates_remaining(void) {
-    /* Only gates 0 and 1 demand a sacrifice; the rest open via items. */
+    /* Gates 0, 1 and 2 demand a sacrifice; the rest open via items. */
     uint8_t n = 0, g;
-    for (g = 0; g < 2; g++) if (!(g_gates & (1 << g))) n++;
+    for (g = 0; g < 3; g++) if (!(g_gates & (1 << g))) n++;
     return n;
 }
 
 static uint8_t virtues_remaining(void) {
     uint8_t n = 0, v;
-    for (v = 0; v < 7; v++) if (g_virtues & (1 << v)) n++;
+    for (v = 0; v < 8; v++) if (g_virtues & (1 << v)) n++;
     return n;
 }
 
 static void build_sac_list(void) {
     uint8_t v;
     sac_count = 0;
-    for (v = 0; v < 7; v++)
+    /* The Hope seal (gate 2) offers Hope alone, so that gate still
+       demands Hope specifically. Every other sacrifice offers all
+       remaining virtues, including Hope: if Hope was already spent
+       early, the Hope gate opens on its own (see the gid == 2 guard
+       in the HS_GATE handler), so spending Hope early can never
+       softlock the game. */
+    if (!g_pending_is_pact && g_pending_id == 2) {
+        if (g_virtues & (1 << 7)) sac_list[sac_count++] = 7;
+        return;
+    }
+    for (v = 0; v < 8; v++)
         if (g_virtues & (1 << v)) sac_list[sac_count++] = v;
 }
 
@@ -972,7 +1111,7 @@ static void build_offer_msg(uint8_t v) {
     while (*s) msg_buf[i++] = *s++;
     s = " TAKES HOLD.";
     while (*s) msg_buf[i++] = *s++;
-    if (g_sins >= 7) {
+    if (g_sins >= 8) {
         s = " THE CASTLE SIGHS.";
         while (*s) msg_buf[i++] = *s++;
     }
@@ -1005,11 +1144,11 @@ static void confirm_sacrifice(void) {
 static void do_ending(void) {
     const char *txt;
     uint8_t r;
-    if (g_sins >= 7)
+    if (g_sins >= 8)
         txt = "YOU DO NOT LEAVE. THE THRONE WAS WAITING, AND SO WERE YOU. "
               "THE GATES OPEN FOR THE NEXT PILGRIM. YOU ARE THE KEEPER. "
               "DARK ENDING.";
-    else if (g_sins >= 3)
+    else if (g_sins >= 4)
         txt = "YOU ESCAPE, BUT THE CASTLE WALKS WITH YOU NOW. "
               "YOUR SHADOW SOMETIMES MOVES FIRST. YOU ARE FREE. MOSTLY. "
               "TAINTED ENDING.";
@@ -1027,12 +1166,12 @@ static void do_ending(void) {
        — major and resolving for pure, minor and unresolved for
        tainted, harmonic-minor and sinking for the keeper. The track
        loops until the player leaves the screen. */
-    if (g_sins >= 7) {
+    if (g_sins >= 8) {
         end_mel_cur = end_keeper_mel;
         end_harm_cur = end_keeper_harm;
         end_bass_cur = end_keeper_bass;
         g_end_track = 3;
-    } else if (g_sins >= 3) {
+    } else if (g_sins >= 4) {
         end_mel_cur = end_tainted_mel;
         end_harm_cur = end_tainted_harm;
         end_bass_cur = end_tainted_bass;
@@ -1072,7 +1211,9 @@ static void interact(void) {
                Round-5: a TAKE lock (the prism's LK_CHART) denies the
                take while the key item is missing and consumes that
                item on a successful take — single use, like every
-               other item. */
+               other item. The 1.1 backtrack locks follow the same
+               pattern: LK_STARKEY for the Moonstone, LK_DROWNEDKEY
+               for the Blade. */
             uint8_t twisted = (g_sins >= 4);
             if (h->lock == LK_CHART && !item_has(IT_CHART)) {
                 sfx_play(sfx_denied);
@@ -1080,7 +1221,21 @@ static void interact(void) {
                              "A STAR CHART WOULD MARK ITS PLACE.");
                 break;
             }
+            if (h->lock == LK_STARKEY && !item_has(IT_STARKEY)) {
+                sfx_play(sfx_denied);
+                show_message("THE MOONSTONE IS SEALED. A STAR KEY "
+                             "FROM THE SUNKEN CHAPEL OPENS IT.");
+                break;
+            }
+            if (h->lock == LK_DROWNEDKEY && !item_has(IT_DROWNEDKEY)) {
+                sfx_play(sfx_denied);
+                show_message("THE BLADE IS LOCKED. A DROWNED KEY "
+                             "FROM THE DROWNED WING OPENS IT.");
+                break;
+            }
             if (h->lock == LK_CHART) item_drop(IT_CHART);
+            if (h->lock == LK_STARKEY) item_drop(IT_STARKEY);
+            if (h->lock == LK_DROWNEDKEY) item_drop(IT_DROWNEDKEY);
             item_give(h->param);
             taken_set(h->param);
             set_bkg_tile_xy(h->x, h->y,
@@ -1098,6 +1253,7 @@ static void interact(void) {
                after its first use consumed it. */
             if ((h->lock == LK_KEY || h->lock == LK_LADDER ||
                  h->lock == LK_OIL || h->lock == LK_OBSIDIAN ||
+                 h->lock == LK_ICEKEY ||
                  h->lock == LK_HORNKEY) &&
                 (g_locks_open & (uint16_t)(1u << h->lock))) {
                 enter_room(h->param);
@@ -1119,6 +1275,10 @@ static void interact(void) {
                        !(g_items & (uint16_t)(1u << IT_OBSIDIAN))) {
                 sfx_play(sfx_denied);
                 show_message("THE SANCTUM DOOR NEEDS A BLACK KEY.");
+            } else if (h->lock == LK_ICEKEY &&
+                       !item_has(IT_ICEKEY)) {
+                sfx_play(sfx_denied);
+                show_message("THE ICE DOOR IS FROZEN SHUT.");
             } else if (h->lock == LK_HORNKEY &&
                        !item_has(IT_LOFTKEY)) {
                 sfx_play(sfx_denied);
@@ -1141,6 +1301,15 @@ static void interact(void) {
                 sfx_play(sfx_denied);
                 show_message("THE ECHO GATE SLEEPS. WAKE THE "
                              "GATEKEEPER FIRST.");
+            } else if (h->lock == LK_GEM && !g_gem_used) {
+                sfx_play(sfx_denied);
+                show_message("THE HIDDEN DOOR IS SEALED. A PALE GEM WOULD OPEN IT.");
+            } else if (h->lock == LK_RIDDLE && !g_riddle_used) {
+                sfx_play(sfx_denied);
+                show_message("THE RIDDLE GUARDIAN BARS THE WAY.");
+            } else if (h->lock == LK_KNIGHT && !g_knight_used) {
+                sfx_play(sfx_denied);
+                show_message("THE DROWNED KNIGHT BARS THE WAY. ONLY A TRUE BLADE COULD MOVE IT.");
             } else if (h->lock == LK_BRIDGE && !g_bridge_built) {
                 sfx_play(sfx_denied);
                 show_message("THE CHASM NEEDS WOOD. A DEAD TREE "
@@ -1165,16 +1334,20 @@ static void interact(void) {
                 } else if (h->lock == LK_HORNKEY) {
                     item_drop(IT_LOFTKEY);
                     g_locks_open |= (uint16_t)(1u << LK_HORNKEY);
+                } else if (h->lock == LK_ICEKEY) {
+                    item_drop(IT_ICEKEY);
+                    g_locks_open |= (uint16_t)(1u << LK_ICEKEY);
                 }
                 enter_room(h->param);
             }
             break;
         case HS_EXIT:
-            if (!(g_items & (uint16_t)(1u << IT_FINALKEY))) {
+            if (!item_has(IT_FINALKEY) || !item_has(IT_SEAL)) {
                 sfx_play(sfx_denied);
-                show_message("THE FINAL GATE NEEDS THE WHOLE KEY. "
-                             "JOIN ITS THREE PIECES AT THE SMITHY "
-                             "FORGE.");
+                show_message("THE FINAL GATE NEEDS THE WHOLE KEY AND "
+                             "THE KEEPER'S SEAL. JOIN THE KEY AT THE "
+                             "FORGE, AND BEAR THE SEAL FROM "
+                             "THE DROWNED WING.");
             } else {
                 sfx_play(sfx_unlock);
                 do_ending();
@@ -1195,6 +1368,12 @@ static void interact(void) {
             } else if (virtues_remaining() == 0) {
                 sfx_play(sfx_denied);
                 show_message("YOU HAVE NOTHING LEFT TO OFFER.");
+            } else if (gid == 2 && !(g_virtues & (1 << 7))) {
+                /* Hope already paid elsewhere: the seal recognizes
+                   the Despair already in you, and opens for free. */
+                g_gates |= (1 << 2);
+                sfx_play(sfx_unlock);
+                show_message("THE SEAL RECOGNIZES YOUR DESPAIR.");
             } else {
                 g_pending_id = gid;
                 g_pending_is_pact = 0;
@@ -1358,6 +1537,55 @@ static void interact(void) {
                     show_message("YOU HOLD THE CANDLE TO THE WAX SEAL. "
                                  "IT MELTS. INSIDE: AN OBSIDIAN KEY.");
                 }
+            } else if (h->param == USE_POOL) {
+                if (g_pool_melted) {
+                    show_message("THE POOL IS MELTED AND EMPTY.");
+                } else if (!item_has(IT_TORCH)) {
+                    sfx_play(sfx_denied);
+                    show_message("THE POOL IS FROZEN SOLID. A TORCH COULD MELT IT.");
+                } else {
+                    g_pool_melted = 1;
+                    item_drop(IT_TORCH);
+                    item_give(IT_ICEKEY);
+                    sfx_play(sfx_unlock);
+                    show_message("YOU HOLD THE TORCH TO THE ICE. IT MELTS. INSIDE: AN ICE KEY.");
+                }
+            } else if (h->param == USE_GEMSLOT) {
+                if (g_gem_used) {
+                    show_message("THE SLOT ALREADY HOLDS ITS GEM.");
+                } else if (!item_has(IT_GEM)) {
+                    sfx_play(sfx_denied);
+                    show_message("A SLOT THE SIZE OF A PALE GEM. THE GALLERY OFF THIS HALL HOLDS ONE.");
+                } else {
+                    g_gem_used = 1;
+                    item_drop(IT_GEM);
+                    sfx_play(sfx_unlock);
+                    show_message("YOU SET THE PALE GEM IN THE SLOT. THE HIDDEN DOOR GRINDS OPEN.");
+                }
+            } else if (h->param == USE_RIDDLE) {
+                if (g_riddle_used) {
+                    show_message("THE GUARDIAN HAS STEPPED ASIDE.");
+                } else if (!item_has(IT_MOONSTONE)) {
+                    sfx_play(sfx_denied);
+                    show_message("THE GUARDIAN WAITS FOR AN ANSWER THAT GLOWS WITHOUT FIRE. THE OBSERVATORY HOLDS IT.");
+                } else {
+                    g_riddle_used = 1;
+                    item_drop(IT_MOONSTONE);
+                    sfx_play(sfx_unlock);
+                    show_message("YOU HOLD UP THE MOONSTONE. IT GLOWS WITHOUT FIRE. THE GUARDIAN STEPS ASIDE.");
+                }
+            } else if (h->param == USE_KNIGHT) {
+                if (g_knight_used) {
+                    show_message("THE KNIGHT HAS STEPPED ASIDE.");
+                } else if (!item_has(IT_BLADE)) {
+                    sfx_play(sfx_denied);
+                    show_message("THE KNIGHT DOES NOT MOVE. ONLY A TRUE BLADE COULD MAKE IT STEP ASIDE.");
+                } else {
+                    g_knight_used = 1;
+                    item_drop(IT_BLADE);
+                    sfx_play(sfx_unlock);
+                    show_message("YOU RAISE THE SILVER BLADE. THE KNIGHT STEPS ASIDE.");
+                }
             } else {  /* USE_BELL: the stair guardian */
                 if (g_bell_used) {
                     show_message("THE GUARDIAN HAS STEPPED ASIDE.");
@@ -1381,39 +1609,40 @@ static void interact(void) {
 static void draw_inv(void) {
     uint8_t i, row, stage, n = 0;
     clear_screen();
-    /* Round-5 layout for 18 items: the corruption portrait sits
-       top-left (2x2 tiles); items fill two columns of 9 (rows 1-9);
-       virtues and sins each get exactly 7 rows (11-17), so no list
-       ever clips off the bottom of the screen. */
-    stage = (g_sins >= 6) ? 3 : (g_sins >= 4) ? 2 : (g_sins >= 2) ? 1 : 0;
+    /* 1.1 layout for up to 26 items (held count stays well under
+       this in practice, as most items are consumed on the path):
+       the corruption portrait sits top-left (2x2 tiles); items fill
+       two columns of 8 (rows 1-8); virtues and sins each get exactly
+       8 rows (10-17), so no list ever clips off the bottom. */
+    stage = (g_sins >= 7) ? 3 : (g_sins >= 5) ? 2 : (g_sins >= 2) ? 1 : 0;
     set_bkg_tile_xy(0, 0, PORT_BASE + stage * 4 + 0);
     set_bkg_tile_xy(1, 0, PORT_BASE + stage * 4 + 1);
     set_bkg_tile_xy(0, 1, PORT_BASE + stage * 4 + 2);
     set_bkg_tile_xy(1, 1, PORT_BASE + stage * 4 + 3);
     draw_str(3, 0, "ITEMS");
     draw_str(12, 0, "B: BACK");
-    for (i = 0; i < 18; i++)
+    for (i = 0; i < 26; i++)
         if (item_has(i)) {
-            if (n < 9) draw_str(2, 1 + n, item_short_names[i]);
-            else draw_str(10, 1 + n - 9, item_short_names[i]);
+            if (n < 8) draw_str(2, 1 + n, item_short_names[i]);
+            else draw_str(10, 1 + n - 8, item_short_names[i]);
             n++;
         }
     if (n == 0) draw_str(2, 1, "NOTHING YET.");
-    draw_str(2, 10, "VIRTUES");
-    draw_str(12, 10, "SINS");
-    row = 11;
-    for (i = 0; i < 7; i++)
+    draw_str(2, 9, "VIRTUES");
+    draw_str(12, 9, "SINS");
+    row = 10;
+    for (i = 0; i < 8; i++)
         if (g_virtues & (1 << i)) {
             draw_str(2, row, virtue_names[i]);
             row++;
         }
-    row = 11;
-    for (i = 0; i < 7; i++)
+    row = 10;
+    for (i = 0; i < 8; i++)
         if (!(g_virtues & (1 << i))) {
             draw_str(12, row, sin_names[i]);
             row++;
         }
-    if (row == 11) draw_str(12, 11, "NONE.");
+    if (row == 10) draw_str(12, 10, "NONE.");
 }
 
 static void draw_title(void) {
@@ -1458,7 +1687,11 @@ static void reset_game(void) {
     g_well_used = 0;
     g_coffer_used = 0;
     g_tree_felled = 0;
-    g_virtues = 0x7F;
+    g_pool_melted = 0;
+    g_gem_used = 0;
+    g_riddle_used = 0;
+    g_knight_used = 0;
+    g_virtues = 0xFF;
     g_room = 0;
     g_hot = 0;
     g_frame = 0;
